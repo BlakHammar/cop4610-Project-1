@@ -3,52 +3,52 @@
 [Description]
 
 ## Group Number
-[Your Group Number]
+Group 38
 
 ## Group Name
 [Your Group Name]
 
 ## Group Members
-- **John Doe**: jd19@fsu.edu
+- **Kobe Myers**: ktm22c@fsu.edu
 - **Jane Smith**: js19@fsu.edu
 - **Alex Brown**: ab19@fsu.edu
 ## Division of Labor
 
 ### Part 1: Prompt
 - **Responsibilities**: [Description]
-- **Assigned to**: John Doe
+- **Assigned to**: Jack, Osher
 
 ### Part 2: Environment Variables
 - **Responsibilities**: [Description]
-- **Assigned to**: Jane Smith
+- **Assigned to**: Kobe, Osh
 
 ### Part 3: Tilde Expansion
 - **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown
+- **Assigned to**: Kobe, Jack
 
 ### Part 4: $PATH Search
 - **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown, Jane Smith
+- **Assigned to**: Osher, Kobe
 
 ### Part 5: External Command Execution
 - **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown, Jane Smith
+- **Assigned to**: Jack, Osher
 
 ### Part 6: I/O Redirection
 - **Responsibilities**: [Description]
-- **Assigned to**: Jane Smith
+- **Assigned to**: Kobe, Jack
 
 ### Part 7: Piping
 - **Responsibilities**: [Description]
-- **Assigned to**: John Doe
+- **Assigned to**: Osher, Kobe
 
 ### Part 8: Background Processing
 - **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown, John Doe
+- **Assigned to**: Jack, Osher
 
 ### Part 9: Internal Command Execution
 - **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown
+- **Assigned to**: Kobe, Jack
 
 ### Part 10: External Timeout Executable
 - **Responsibilities**: [Description]
