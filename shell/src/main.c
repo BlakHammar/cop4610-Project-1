@@ -2,9 +2,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <limits.h>
 
 void display_prompt();
 void expand_environment_variables(char *input);
+void searchPath(const tokenlist *tokens);
+void executeCommand(const char *fullPath, const tokenlist *tokens);
+char **tokenlist_to_argv(const tokenlist *tokens) ;
 
 int main()
 {
@@ -27,6 +32,8 @@ int main()
             printf("token %d: (%s)\n", i, tokens->items[i]);
         }
 
+        searchPath(tokens);
+
         free(input);
         free_tokens(tokens);
     }
@@ -34,98 +41,26 @@ int main()
     return 0;
 }
 
-char *get_input(void) {
-    char *buffer = NULL;
-    int bufsize = 0;
-    char line[5];
-    while (fgets(line, 5, stdin) != NULL)
-    {
-        int addby = 0;
-        char *newln = strchr(line, '\n');
-        if (newln != NULL)
-            addby = newln - line;
-        else
-            addby = 5 - 1;
-        buffer = (char *)realloc(buffer, bufsize + addby);
-        memcpy(&buffer[bufsize], line, addby);
-        bufsize += addby;
-        if (newln != NULL)
-            break;
-    }
-    buffer = (char *)realloc(buffer, bufsize + 1);
-    buffer[bufsize] = 0;
-    return buffer;
-}
-
-tokenlist *new_tokenlist(void) {
-    tokenlist *tokens = (tokenlist *)malloc(sizeof(tokenlist));
-    tokens->size = 0;
-    tokens->items = (char **)malloc(sizeof(char *));
-    tokens->items[0] = NULL; /* make NULL terminated */
-    return tokens;
-}
-
-void add_token(tokenlist *tokens, char *item) {
-    int i = tokens->size;
-
-    tokens->items = (char **)realloc(tokens->items, (i + 2) * sizeof(char *));
-    tokens->items[i] = (char *)malloc(strlen(item) + 1);
-    tokens->items[i + 1] = NULL;
-    strcpy(tokens->items[i], item);
-
-    tokens->size += 1;
-}
-
-tokenlist *get_tokens(char *input) {
-    char *buf = (char *)malloc(strlen(input) + 1);
-    strcpy(buf, input);
-    tokenlist *tokens = new_tokenlist();
-    char *tok = strtok(buf, " ");
-    while (tok != NULL)
-    {
-        add_token(tokens, tok);
-        tok = strtok(NULL, " ");
-    }
-    free(buf);
-    return tokens;
-}
-
-void free_tokens(tokenlist *tokens) {
-    for (int i = 0; i < tokens->size; i++)
-        free(tokens->items[i]);
-    free(tokens->items);
-    free(tokens);
-}
-
-
 void display_prompt()
 {
-    // Get the user name
-    char *user = getenv("USER");
-    if (user == NULL)
-    {
-        perror("Error getting USER environment variable");
-        exit(EXIT_FAILURE);
-    }
+    // Get environment variables
+    char* user = getenv("USER");
 
-    // Get the machine name
-    char *machine = getenv("MACHINE");
-    if (machine == NULL)
-    {
-        perror("Error getting MACHINE environment variable");
-        exit(EXIT_FAILURE);
-    }
+    // Use a buffer for the machine name
+    char machine[256];  // Choose a reasonable buffer size
+    gethostname(machine, sizeof(machine));
 
-    // Get the absolute working directory
-    char *pwd = getenv("PWD");
-    if (pwd == NULL)
-    {
-        perror("Error getting PWD environment variable");
+    char* pwd = getcwd(NULL, 0);
+    if (pwd == NULL) {
+        perror("getcwd");
         exit(EXIT_FAILURE);
     }
 
     // Display the prompt
     printf("%s@%s:%s> ", user, machine, pwd);
+
+    // Free memory allocated by getcwd
+    free(pwd);
 }
 
 void expand_environment_variables(char *input)
@@ -167,4 +102,106 @@ void expand_environment_variables(char *input)
 
     // Copy the modified input back to the original input
     strcpy(input, modified_input);
+}
+
+void searchPath(const tokenlist *tokens) {
+    // Check if tokens is empty
+    if (tokens == NULL || tokens->size == 0) {
+        fprintf(stderr, "No command provided\n");
+        return;
+    }
+
+    // Get the first token as the command
+    const char *command = tokens->items[0];
+
+    // Get the PATH environment variable
+    const char *path = getenv("PATH");
+
+    // Check if PATH is not set
+    if (path == NULL) {
+        fprintf(stderr, "PATH environment variable is not set\n");
+        return;
+    }
+
+    // Create a copy of PATH to avoid modifying the original string
+    char *pathCopy = strdup(path);
+
+    // Tokenize the PATH string using colon as the delimiter
+    char *token = strtok(pathCopy, ":");
+
+    bool foundPath = false;
+    // Loop through each directory in PATH
+    while (token != NULL) {
+        // Construct the full path to the command in the current directory
+        char fullPath[256];  // Adjust the size as needed
+        snprintf(fullPath, sizeof(fullPath), "%s/%s", token, command);
+
+        // Check if the file exists
+        if (access(fullPath, X_OK) == 0) {
+            // The file exists and is executable, execute it
+            printf("Executing: %s\n", fullPath);
+            executeCommand(fullPath,tokens);
+            foundPath = true;
+            break;  // Stop searching after the first match
+        }
+
+        // Move to the next directory in PATH
+        token = strtok(NULL, ":");
+    }
+
+    //Change to error message
+    if(!foundPath){
+        printf("Command not found\n");
+    }
+    // Free the allocated memory for the copied PATH string
+    free(pathCopy);
+}
+
+// Function to execute an external command with arguments
+void executeCommand(const char *fullPath, const tokenlist *tokens) {
+    pid_t pid = fork(); // Create a child process
+
+    if (pid < 0) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    } else if (pid == 0) {
+        // This code is executed by the child process
+
+        // Execute the command in the child process
+        execv(fullPath,tokenlist_to_argv(tokens));
+
+        // If execv returns, an error occurred
+        perror("execv");
+        exit(EXIT_FAILURE);
+    } else {
+        // This code is executed by the parent process
+
+        // Wait for the child process to complete
+        int status;
+        waitpid(pid, &status, 0);
+
+        // Check if the child process terminated normally
+        if (WIFEXITED(status)) {
+            printf("Child process exited with status %d\n", WEXITSTATUS(status));
+        } else {
+            printf("Child process did not exit normally\n");
+        }
+    }
+}
+
+// Convert tokenlist to execv-compatible array
+char **tokenlist_to_argv(const tokenlist *tokens) {
+    char **argv = (char **)malloc((tokens->size + 1) * sizeof(char *));
+    if (argv == NULL) {
+        perror("malloc");
+        exit(EXIT_FAILURE);
+    }
+
+    for (size_t i = 0; i < tokens->size; ++i) {
+        argv[i] = tokens->items[i];
+    }
+
+    argv[tokens->size] = NULL;  // Ensure the last element is NULL
+
+    return argv;
 }
