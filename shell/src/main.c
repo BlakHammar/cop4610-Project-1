@@ -4,6 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <limits.h>
+#include <sys/types.h>
 
 void display_prompt();
 void expand_environment_variables(char *input);
@@ -179,13 +180,6 @@ void executeCommand(const char *fullPath, const tokenlist *tokens) {
         // Wait for the child process to complete
         int status;
         waitpid(pid, &status, 0);
-
-        // Check if the child process terminated normally
-        if (WIFEXITED(status)) {
-            printf("Child process exited with status %d\n", WEXITSTATUS(status));
-        } else {
-            printf("Child process did not exit normally\n");
-        }
     }
 }
 
