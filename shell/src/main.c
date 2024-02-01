@@ -88,6 +88,25 @@ void expand_environment_variables(char *input)
                 strcat(modified_input, " ");
             }
         }
+        if(token[0] == '~')
+        {
+            // Expand tilde (~) to the value of $HOME
+            char *home_directory = getenv("HOME");
+
+            // If tilde is followed by a specific path, append it to the home directory
+            if(token[1] == '/')
+            {
+                strcat(modified_input, home_directory);
+                strcat(modified_input, token + 1);
+                strcat(modified_input, " ");
+            }
+            else
+            {
+                // Concatenate the home directory path to the modified string
+                strcat(modified_input, home_directory);
+                strcat(modified_input, " ");
+            }
+        }
         else
         {
             // Keep non-environment variable tokens unchanged
