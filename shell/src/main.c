@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <sys/types.h>
+#include <fcntl.h>
 
 void display_prompt();
 void expand_environment_variables(char *input);
@@ -25,8 +26,6 @@ int main()
         printf("whole input: %s\n", input);
 
         expand_environment_variables(input);
-        
-        printf("whole input: %s\n", input);
 
         tokenlist *tokens = get_tokens(input);
         for (int i = 0; i < tokens->size; i++) {
@@ -160,7 +159,7 @@ void searchPath(const tokenlist *tokens) {
         if (access(fullPath, X_OK) == 0) {
             // The file exists and is executable, execute it
             printf("Executing: %s\n", fullPath);
-            executeCommand(fullPath,tokens);
+            executeCommandModified(fullPath,tokens);
             foundPath = true;
             break;  // Stop searching after the first match
         }
@@ -218,7 +217,7 @@ char **tokenlist_to_argv(const tokenlist *tokens) {
 
     return argv;
 }
-/*
+
 void redirection(char *cmd, char *fileIn, char *fileOut) 
 {
     // Input redirection
@@ -302,4 +301,3 @@ void executeCommandModified(const char *fullPath, const tokenlist *tokens)
         waitpid(pid, &status, 0);
     }
 }
-*/
