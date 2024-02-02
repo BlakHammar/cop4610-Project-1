@@ -218,7 +218,7 @@ char **tokenlist_to_argv(const tokenlist *tokens) {
 
     return argv;
 }
-
+/*
 void redirection(char *cmd, char *fileIn, char *fileOut) 
 {
     // Input redirection
@@ -302,3 +302,4 @@ void executeCommandModified(const char *fullPath, const tokenlist *tokens)
         waitpid(pid, &status, 0);
     }
 }
+*/
