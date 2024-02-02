@@ -218,3 +218,87 @@ char **tokenlist_to_argv(const tokenlist *tokens) {
 
     return argv;
 }
+
+void redirection(char *cmd, char *fileIn, char *fileOut) 
+{
+    // Input redirection
+    if (fileIn != NULL) 
+    {
+        int inFd = open(fileIn, O_RDONLY);
+        if (inFd == -1) 
+        {
+            perror("open input file");
+            exit(EXIT_FAILURE);
+        }
+        if (dup2(inFd, STDIN_FILENO) == -1)
+        {
+            perror("dup2 input file");
+            exit(EXIT_FAILURE);
+        }
+        close(inFd);
+    }
+
+    // Output redirection
+    if (fileOut != NULL) 
+    {
+        int outFd = open(fileOut, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        if (outFd == -1) 
+        {
+            perror("open output file");
+            exit(EXIT_FAILURE);
+        }
+        if (dup2(outFd, STDOUT_FILENO) == -1)
+        {
+            perror("dup2 output file");
+            exit(EXIT_FAILURE);
+        }
+        close(outFd);
+    }
+}
+//MODIFIED FUNCTION THAT I HAVEN"T TESTED FOR IO REDIRECTION
+void executeCommandModified(const char *fullPath, const tokenlist *tokens)
+{
+    pid_t pid = fork(); // Create a child process
+
+    if (pid < 0) 
+    {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    } else if (pid == 0) 
+    {
+        // This code is executed by the child process
+
+        // Check for redirection in tokens and setup accordingly
+        char *fileIn = NULL;
+        char *fileOut = NULL;
+        for (int i = 0; i < tokens->size; i++) 
+        {
+            if (strcmp(tokens->items[i], "<") == 0) 
+            {
+                fileIn = tokens->items[i + 1];
+                tokens->items[i] = NULL; // Break the command at the redirection symbol
+            }
+            if (strcmp(tokens->items[i], ">") == 0) 
+            {
+                fileOut = tokens->items[i + 1];
+                tokens->items[i] = NULL; // Break the command at the redirection symbol
+            }
+        }
+
+        redirection(fullPath, fileIn, fileOut); // Handle redirection
+
+        // Execute the command in the child process
+        execv(fullPath, tokenlist_to_argv(tokens));
+
+        // If execv returns, an error occurred
+        perror("execv");
+        exit(EXIT_FAILURE);
+    } else
+    {
+        // This code is executed by the parent process
+
+        // Wait for the child process to complete
+        int status;
+        waitpid(pid, &status, 0);
+    }
+}
