@@ -11,7 +11,9 @@ void display_prompt();
 void expand_environment_variables(char *input);
 void searchPath(const tokenlist *tokens);
 void executeCommand(const char *fullPath, const tokenlist *tokens);
-char **tokenlist_to_argv(const tokenlist *tokens) ;
+char **tokenlist_to_argv(const tokenlist *tokens);
+void redirection(char *fileIn, char *fileOut);
+void executeCommandModified(const char *fullPath, const tokenlist *tokens);
 
 int main()
 {
@@ -218,82 +220,86 @@ char **tokenlist_to_argv(const tokenlist *tokens) {
     return argv;
 }
 
-void redirection(char *cmd, char *fileIn, char *fileOut) 
-{
+//IO redirection
+void redirection(char *fileIn, char *fileOut) {
     // Input redirection
-    if (fileIn != NULL) 
-    {
+    if (fileIn != NULL) {
         int inFd = open(fileIn, O_RDONLY);
-        if (inFd == -1) 
-        {
-            perror("open input file");
+        if (inFd == -1) {
+            perror("Error opening input file for redirection");
             exit(EXIT_FAILURE);
         }
-        if (dup2(inFd, STDIN_FILENO) == -1)
-        {
-            perror("dup2 input file");
+        if (dup2(inFd, STDIN_FILENO) == -1) {
+            perror("Error duplicating file descriptor for input redirection");
             exit(EXIT_FAILURE);
         }
         close(inFd);
     }
 
     // Output redirection
-    if (fileOut != NULL) 
-    {
+    if (fileOut != NULL) {
         int outFd = open(fileOut, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-        if (outFd == -1) 
-        {
-            perror("open output file");
+        if (outFd == -1) {
+            perror("Error opening output file for redirection");
             exit(EXIT_FAILURE);
         }
-        if (dup2(outFd, STDOUT_FILENO) == -1)
-        {
-            perror("dup2 output file");
+        if (dup2(outFd, STDOUT_FILENO) == -1) {
+            perror("Error duplicating file descriptor for output redirection");
             exit(EXIT_FAILURE);
         }
         close(outFd);
     }
 }
-//MODIFIED FUNCTION THAT I HAVEN"T TESTED FOR IO REDIRECTION
-void executeCommandModified(const char *fullPath, const tokenlist *tokens)
-{
+
+//Modified execute to work with IO redirection
+void executeCommandModified(const char *fullPath, const tokenlist *tokens) {
     pid_t pid = fork(); // Create a child process
 
-    if (pid < 0) 
-    {
+    if (pid < 0) {
         perror("fork");
         exit(EXIT_FAILURE);
-    } else if (pid == 0) 
-    {
+    } else if (pid == 0) {
         // This code is executed by the child process
 
-        // Check for redirection in tokens and setup accordingly
+        // Initialize file pointers for redirection
         char *fileIn = NULL;
         char *fileOut = NULL;
-        for (int i = 0; i < tokens->size; i++) 
+        char **argv = (char **)malloc((tokens->size + 1) * sizeof(char *));
+        if (argv == NULL)
         {
-            if (strcmp(tokens->items[i], "<") == 0) 
+            perror("malloc");
+            exit(EXIT_FAILURE);
+        }
+        int j = 0; // Index for argv
+        for (int i = 0; i < tokens->size; i++) {
+            if (strcmp(tokens->items[i], "<") == 0 && i + 1 < tokens->size) 
             {
                 fileIn = tokens->items[i + 1];
-                tokens->items[i] = NULL; // Break the command at the redirection symbol
-            }
-            if (strcmp(tokens->items[i], ">") == 0) 
+                i++; // Skip the next token (filename for input redirection)
+            } 
+            else if (strcmp(tokens->items[i], ">") == 0 && i + 1 < tokens->size) 
             {
                 fileOut = tokens->items[i + 1];
-                tokens->items[i] = NULL; // Break the command at the redirection symbol
+                i++; // Skip the next token (filename for output redirection)
+            } 
+            else 
+            {
+                // This token is part of the command
+                argv[j++] = tokens->items[i];
             }
         }
+        argv[j] = NULL; // NULL-terminate argv
 
-        redirection(fullPath, fileIn, fileOut); // Handle redirection
+        // Handle redirection
+        redirection(fileIn, fileOut);
 
         // Execute the command in the child process
-        execv(fullPath, tokenlist_to_argv(tokens));
+        execv(fullPath, argv);
 
         // If execv returns, an error occurred
         perror("execv");
         exit(EXIT_FAILURE);
-    } else
-    {
+    } else {
         // This code is executed by the parent process
 
         // Wait for the child process to complete
