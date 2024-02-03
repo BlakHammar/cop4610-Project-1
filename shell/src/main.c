@@ -6,14 +6,29 @@
 #include <limits.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <sys/wait.h>
 
 void display_prompt();
 void expand_environment_variables(char *input);
-void searchPath(const tokenlist *tokens);
+void searchPath(const tokenlist *tokens, int runInBackground);
 void executeCommand(const char *fullPath, const tokenlist *tokens);
 char **tokenlist_to_argv(const tokenlist *tokens);
 void redirection(char *fileIn, char *fileOut);
-void executeCommandModified(const char *fullPath, const tokenlist *tokens);
+void executeCommandModified(const char *fullPath, const tokenlist *tokens, int runInBackground);
+void checkBgStatus();
+
+#define MAX_BACKGROUND_JOBS 10
+
+typedef struct
+{
+    pid_t pid;
+    int jobNum;
+    char command[256];
+    int active;
+} backgroundJob;
+
+backgroundJob bgProcess[MAX_BACKGROUND_JOBS];
+int nextJob = 1;
 
 int main()
 {
@@ -33,9 +48,16 @@ int main()
         for (int i = 0; i < tokens->size; i++) {
             printf("token %d: (%s)\n", i, tokens->items[i]);
         }
-
-        searchPath(tokens);
-
+        int runInBackground = 0;
+        if(strcmp(tokens->items[tokens->size - 1], "&") == 0 )
+        {
+            runInBackground = 1;
+            free(tokens->items[tokens->size - 1]);
+            tokens->size--;
+        }
+        searchPath(tokens, runInBackground);
+        checkBgStatus();
+        
         free(input);
         free_tokens(tokens);
     }
@@ -125,7 +147,7 @@ void expand_environment_variables(char *input)
     strcpy(input, modified_input);
 }
 
-void searchPath(const tokenlist *tokens) {
+void searchPath(const tokenlist *tokens, int runInBackground) {
     // Check if tokens is empty
     if (tokens == NULL || tokens->size == 0) {
         fprintf(stderr, "No command provided\n");
@@ -161,7 +183,7 @@ void searchPath(const tokenlist *tokens) {
         if (access(fullPath, X_OK) == 0) {
             // The file exists and is executable, execute it
             printf("Executing: %s\n", fullPath);
-            executeCommandModified(fullPath,tokens);
+            executeCommandModified(fullPath,tokens, runInBackground);
             foundPath = true;
             break;  // Stop searching after the first match
         }
@@ -252,7 +274,7 @@ void redirection(char *fileIn, char *fileOut) {
 }
 
 //Modified execute to work with IO redirection
-void executeCommandModified(const char *fullPath, const tokenlist *tokens) {
+void executeCommandModified(const char *fullPath, const tokenlist *tokens, int runInBackground) {
     pid_t pid = fork(); // Create a child process
 
     if (pid < 0) {
@@ -301,9 +323,53 @@ void executeCommandModified(const char *fullPath, const tokenlist *tokens) {
         exit(EXIT_FAILURE);
     } else {
         // This code is executed by the parent process
-
-        // Wait for the child process to complete
-        int status;
-        waitpid(pid, &status, 0);
+        if(runInBackground)
+        {
+            // Find spot in the array for new bg job
+            for(int i = 0; i < MAX_BACKGROUND_JOBS; i++)
+            {
+                if(!bgProcess[i].active)
+                {
+                    // Found
+                    bgProcess[i].pid = pid;
+                    bgProcess[i].jobNum = nextJob++;
+                    strncpy(bgProcess[i].command, fullPath, sizeof(bgProcess[i].command));
+                    bgProcess[i].active = 1;
+                    printf("[%d] %d\n", bgProcess[i].jobNum, pid);
+                    break;
+                }
+            }
+        }
+        else
+        {
+            // Wait for child process to complete
+            int status; 
+            waitpid(pid, &status, 0);
+        }
+    }
+}
+// Checks to see if background jobs are finished
+void checkBgStatus()
+{
+    for(int i = 0; i < MAX_BACKGROUND_JOBS; i++)
+    {
+        if(bgProcess[i].active)
+        {
+            int status;
+            pid_t result = waitpid(bgProcess[i].pid, &status, WNOHANG);
+            if(result == bgProcess[i].pid)
+            {
+                // Job is done
+                printf("[%d] + done %s\n", bgProcess[i].jobNum, bgProcess[i].command);
+                bgProcess[i].active = 0;
+            }
+            else if(result == 0) {/*Job is not finished*/}
+            else
+            {
+                // Error
+                perror("waitpid");
+                bgProcess[i].active = 0;
+            }
+        }
     }
 }
