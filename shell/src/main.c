@@ -16,6 +16,7 @@ char **tokenlist_to_argv(const tokenlist *tokens);
 void redirection(char *fileIn, char *fileOut);
 void executeCommandModified(const char *fullPath, const tokenlist *tokens, int runInBackground);
 void checkBgStatus();
+void executePipeline(const tokenlist *cmd1_tokens, const tokenlist *cmd2_tokens, int runInBackground);
 
 #define MAX_BACKGROUND_JOBS 10
 
@@ -55,7 +56,46 @@ int main()
             free(tokens->items[tokens->size - 1]);
             tokens->size--;
         }
-        searchPath(tokens, runInBackground);
+        
+        // Check for pipes
+        int pipeIndex = -1;
+        for (int i = 0; i < tokens->size; i++) {
+            if (strcmp(tokens->items[i], "|") == 0) {
+                pipeIndex = i;
+                break;
+            }
+        }
+
+        if (pipeIndex != -1) 
+        {
+            // Handle piping
+            tokenlist *cmd1_tokens = create_tokenlist();
+            tokenlist *cmd2_tokens = create_tokenlist();
+
+            // Populate cmd1_tokens with tokens before the pipe
+            for (int i = 0; i < pipeIndex; i++) 
+            {
+                add_token(cmd1_tokens, tokens->items[i]);
+            }
+
+            // Populate cmd2_tokens with tokens after the pipe
+            for (int i = pipeIndex + 1; i < tokens->size; i++) 
+            {
+                add_token(cmd2_tokens, tokens->items[i]);
+            }
+
+            // Execute commands in a pipeline
+            executePipeline(cmd1_tokens, cmd2_tokens, runInBackground);
+
+            // Free allocated memory
+            free_tokens(cmd1_tokens);
+            free_tokens(cmd2_tokens);
+        } 
+        else 
+        {
+            // No pipe, execute single command
+            searchPath(tokens, runInBackground);
+        }
         checkBgStatus();
         
         free(input);
@@ -373,3 +413,59 @@ void checkBgStatus()
         }
     }
 }
+void executePipeline(const tokenlist *cmd1_tokens, const tokenlist *cmd2_tokens, int runInBackground)
+{
+    // create array for pipe file descriptors
+	int fd[2];
+	// create read and write end of pipe
+	pipe(fd);
+	printf("fd[0] = %d, fd[1] = %d\n", fd[0], fd[1]);
+	// create new process
+	pid_t pid = fork();
+
+	// child process
+	if(pid == 0) 
+    {	
+		// replace stdout with write end of pipe
+		dup2(fd[1], STDOUT_FILENO);
+		// close read end of pipe
+		close(fd[0]);
+		// close duplicate reference to write end of pipe
+		close(fd[1]);
+        
+        // Execute cmd1
+        executeCommandModified(cmd1_tokens->items[0], cmd1_tokens, 0);
+
+         // Child process 1 should exit after cmd1 execution
+        exit(EXIT_SUCCESS);
+	}
+	// parent process
+	pid_t pid2 = fork();
+
+    // Child process 2
+    if(pid2 == 0) 
+    {
+        // replace stdin with read end of pipe
+		dup2(fd[0], STDIN_FILENO);
+		// close read end of pipe
+		close(fd[0]);
+		// close duplicate reference to write end of pipe
+		close(fd[1]);
+        
+        // Execute cmd2
+        executeCommandModified(cmd2_tokens->items[0], cmd2_tokens, runInBackground);
+        
+        // Child process 2 should exit after cmd2 execution
+        exit(EXIT_SUCCESS);
+    }
+
+	 // Parent process should close both ends of the pipe
+    close(pipefd[0]);
+    close(pipefd[1]);
+
+    // Wait for both child processes to complete
+    int status1, status2;
+    waitpid(pid1, &status1, 0);
+    waitpid(pid2, &status2, 0);
+}
+	
