@@ -16,8 +16,10 @@ char **tokenlist_to_argv(const tokenlist *tokens);
 void redirection(char *fileIn, char *fileOut);
 void executeCommandModified(const char *fullPath, const tokenlist *tokens, int runInBackground);
 void checkBgStatus();
+void cd(tokenlist * tokens);
 
 #define MAX_BACKGROUND_JOBS 10
+#define MAX_RECENT_COMMANDS 3
 
 typedef struct
 {
@@ -55,7 +57,15 @@ int main()
             free(tokens->items[tokens->size - 1]);
             tokens->size--;
         }
-        searchPath(tokens, runInBackground);
+        //Check for commands
+        if(strcmp(tokens->items[0], "cd") == 0)
+            cd(tokens);
+        //Other external command    
+        else
+        {
+            searchPath(tokens, runInBackground);
+        }
+        
         checkBgStatus();
         
         free(input);
@@ -348,7 +358,7 @@ void executeCommandModified(const char *fullPath, const tokenlist *tokens, int r
         }
     }
 }
-// Checks to see if background jobs are finished
+
 void checkBgStatus()
 {
     for(int i = 0; i < MAX_BACKGROUND_JOBS; i++)
@@ -373,3 +383,28 @@ void checkBgStatus()
         }
     }
 }
+
+// Change directory
+void cd(tokenlist * tokens)
+{
+    // Wrong usage of command
+    if(tokens->size > 2)
+    {
+        fprintf(stderr, "too many arguments\n");
+        return;
+    }
+    // If no destination is given, change path to home
+    // else set path to second token
+    char * path = tokens->size == 1 ? getenv("HOME") : tokens->items[1];
+    // Return if there is no home directory
+    if(path == NULL)
+    {
+        fprintf(stderr,"No HOME set\n");
+        return;
+    }
+    //Change directory to path
+    //if returns non-zero an error has occured
+    if(chdir(path) != 0)
+        perror("cd");
+}
+
