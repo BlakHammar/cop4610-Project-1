@@ -1,17 +1,17 @@
 # Shell
 
-[Description]
+Unix shell written in C
 
 ## Group Number
 Group 38
 
 ## Group Name
-[Your Group Name]
+Group 38
 
 ## Group Members
 - **Kobe Myers**: ktm22c@fsu.edu
-- **Jane Smith**: js19@fsu.edu
-- **Alex Brown**: ab19@fsu.edu
+- **Jack Throdahl** jtt20q@fsu.edu
+- **Osher Steel** os19h@fsu.edu
 ## Division of Labor
 
 ### Part 1: Prompt
@@ -50,13 +50,9 @@ Group 38
 - **Responsibilities**: [Description]
 - **Assigned to**: Kobe, Jack
 
-### Part 10: External Timeout Executable
-- **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown, Jane Smith
-
 ### Extra Credit
 - **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown
+- **Assigned to**: Kobe, Osher, Jack
 
 ## File Listing
 ```
@@ -64,10 +60,10 @@ shell/
 │
 ├── src/
 │ ├── main.c
-│ └── shell.c
+│ └── lexer.c
 │
 ├── include/
-│ └── shell.h
+│ └── lexer.h
 │
 ├── README.md
 └── Makefile
@@ -75,30 +71,18 @@ shell/
 ## How to Compile & Execute
 
 ### Requirements
-- **Compiler**: e.g., `gcc` for C/C++, `rustc` for Rust.
-- **Dependencies**: List any libraries or frameworks necessary (rust only).
+- **Compiler**: gcc
 
 ### Compilation
-For a C/C++ example:
 ```bash
 make
 ```
 This will build the executable in ...
 ### Execution
 ```bash
-make run
+bin/shell
 ```
 This will run the program ...
 
 ## Bugs
-- **Bug 1**: This is bug 1.
-- **Bug 2**: This is bug 2.
-- **Bug 3**: This is bug 3.
 
-## Extra Credit
-- **Extra Credit 1**: [Extra Credit Option]
-- **Extra Credit 2**: [Extra Credit Option]
-- **Extra Credit 3**: [Extra Credit Option]
-
-## Considerations
-[Description]
