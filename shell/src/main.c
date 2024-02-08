@@ -10,18 +10,20 @@
 
 void display_prompt();
 void expand_environment_variables(char *input);
-void searchPath(const tokenlist *tokens, int runInBackground);
+bool searchPath(const tokenlist *tokens, int runInBackground);
 void executeCommand(const char *fullPath, const tokenlist *tokens);
 char **tokenlist_to_argv(const tokenlist *tokens);
 void redirection(char *fileIn, char *fileOut);
 void executeCommandModified(const char *fullPath, const tokenlist *tokens, int runInBackground);
-void checkBgStatus();
+bool checkBgStatus();
 void cd(tokenlist * tokens);
 void exitShell();
 void jobs();
+void addToRecentCmds(tokenlist * tokens);
 
 #define MAX_BACKGROUND_JOBS 10
 #define MAX_RECENT_COMMANDS 3
+#define MAX_COMMAND_LENGTH 200
 
 typedef struct
 {
@@ -33,14 +35,16 @@ typedef struct
 
 typedef struct
 {
-    char command[200];
+    char command[MAX_COMMAND_LENGTH];
 
 } recentCommand;
 
 backgroundJob bgProcess[MAX_BACKGROUND_JOBS];
 int nextJob = 1;
 
+int numCommands = 0;
 recentCommand rCommands[MAX_RECENT_COMMANDS];
+char rCommands2[MAX_RECENT_COMMANDS][MAX_COMMAND_LENGTH];
 
 int main()
 {
@@ -50,7 +54,6 @@ int main()
         /* input contains the whole command
          * tokens contains substrings from input split by spaces
          */
-
         char *input = get_input();
         printf("whole input: %s\n", input);
 
@@ -60,6 +63,7 @@ int main()
         for (int i = 0; i < tokens->size; i++) {
             printf("token %d: (%s)\n", i, tokens->items[i]);
         }
+        
         int runInBackground = 0;
         if(strcmp(tokens->items[tokens->size - 1], "&") == 0 )
         {
@@ -68,16 +72,21 @@ int main()
             tokens->size--;
         }
         //Check for commands
-        if(strcmp(tokens->items[0], "cd") == 0)
+        if(strcmp(tokens->items[0], "cd") == 0){
             cd(tokens);
+            addToRecentCmds(tokens);
+        }
+        else if(strcmp(tokens->items[0], "jobs") == 0){
+            jobs();
+            addToRecentCmds(tokens);
+        }
         else if(strcmp(tokens->items[0], "exit") == 0)
             exitShell();
-        else if(strcmp(tokens->items[0], "jobs") == 0)
-            jobs();
         //Other external command    
         else
         {
-            searchPath(tokens, runInBackground);
+            if(searchPath(tokens, runInBackground))
+                addToRecentCmds(tokens);
         }
         
         checkBgStatus();
@@ -113,7 +122,6 @@ void display_prompt()
 
 void expand_environment_variables(char *input)
 {
-    int counter = 0;
     char *token = strtok(input, " ");
     char modified_input[1000];  // Creating string in case we need to change.
     modified_input[0] = '\0';    // Initialize the modified string
@@ -171,11 +179,11 @@ void expand_environment_variables(char *input)
     strcpy(input, modified_input);
 }
 
-void searchPath(const tokenlist *tokens, int runInBackground) {
+bool searchPath(const tokenlist *tokens, int runInBackground) {
     // Check if tokens is empty
     if (tokens == NULL || tokens->size == 0) {
         fprintf(stderr, "No command provided\n");
-        return;
+        return false;
     }
 
     // Get the first token as the command
@@ -187,7 +195,7 @@ void searchPath(const tokenlist *tokens, int runInBackground) {
     // Check if PATH is not set
     if (path == NULL) {
         fprintf(stderr, "PATH environment variable is not set\n");
-        return;
+        return false;
     }
 
     // Create a copy of PATH to avoid modifying the original string
@@ -206,7 +214,6 @@ void searchPath(const tokenlist *tokens, int runInBackground) {
         // Check if the file exists
         if (access(fullPath, X_OK) == 0) {
             // The file exists and is executable, execute it
-            printf("Executing: %s\n", fullPath);
             executeCommandModified(fullPath,tokens, runInBackground);
             foundPath = true;
             break;  // Stop searching after the first match
@@ -219,9 +226,12 @@ void searchPath(const tokenlist *tokens, int runInBackground) {
     //Change to error message
     if(!foundPath){
         printf("Command not found\n");
+        return false;
     }
     // Free the allocated memory for the copied PATH string
     free(pathCopy);
+
+    return true;
 }
 
 // Function to execute an external command with arguments
@@ -373,8 +383,9 @@ void executeCommandModified(const char *fullPath, const tokenlist *tokens, int r
     }
 }
 
-void checkBgStatus()
+bool checkBgStatus()
 {
+    bool jobsRunning = false;
     for(int i = 0; i < MAX_BACKGROUND_JOBS; i++)
     {
         if(bgProcess[i].active)
@@ -387,7 +398,10 @@ void checkBgStatus()
                 printf("[%d] + done %s\n", bgProcess[i].jobNum, bgProcess[i].command);
                 bgProcess[i].active = 0;
             }
-            else if(result == 0) {/*Job is not finished*/}
+            else if(result == 0) {
+                /*Job is not finished*/
+                jobsRunning = true;
+            }
             else
             {
                 // Error
@@ -396,6 +410,8 @@ void checkBgStatus()
             }
         }
     }
+
+    return jobsRunning;
 }
 
 // List background jobs
@@ -442,5 +458,34 @@ void cd(tokenlist * tokens)
 
 void exitShell()
 {
+    while(checkBgStatus()){
+        //Wait until all jobs are finished
+    }
+
+    if(numCommands == 0){
+         printf("No recent commands");
+    }
+    else if(numCommands>=3){
+        printf("Last 3 valid commands:\n");
+        printf("[1]: %s\n",rCommands2[2]);
+        printf("[2]: %s\n",rCommands2[1]);
+        printf("[3]: %s\n",rCommands2[0]);
+    }
+    else{
+        printf("Last valid command: %s",rCommands2[numCommands-1]);
+    }
     exit(0);
+}
+
+void addToRecentCmds(tokenlist * tokens){
+    if(numCommands <= 2){
+        snprintf(rCommands2[numCommands], MAX_COMMAND_LENGTH, tokens->items[0]);
+    }
+    else{
+        snprintf(rCommands2[0], MAX_COMMAND_LENGTH, rCommands2[1]);
+        snprintf(rCommands2[1], MAX_COMMAND_LENGTH, rCommands2[2]);
+        snprintf(rCommands2[2], MAX_COMMAND_LENGTH, tokens->items[0]);
+    }
+
+    numCommands++;
 }
