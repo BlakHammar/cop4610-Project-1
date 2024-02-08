@@ -19,7 +19,7 @@ bool checkBgStatus();
 void cd(tokenlist * tokens);
 void exitShell();
 void jobs();
-void addToRecentCmds(tokenlist * tokens);
+void addToRecentCmds(char *command);
 
 #define MAX_BACKGROUND_JOBS 10
 #define MAX_RECENT_COMMANDS 3
@@ -60,9 +60,6 @@ int main()
         expand_environment_variables(input);
 
         tokenlist *tokens = get_tokens(input);
-        for (int i = 0; i < tokens->size; i++) {
-            printf("token %d: (%s)\n", i, tokens->items[i]);
-        }
         
         int runInBackground = 0;
         if(strcmp(tokens->items[tokens->size - 1], "&") == 0 )
@@ -74,11 +71,11 @@ int main()
         //Check for commands
         if(strcmp(tokens->items[0], "cd") == 0){
             cd(tokens);
-            addToRecentCmds(tokens);
+            addToRecentCmds(input);
         }
         else if(strcmp(tokens->items[0], "jobs") == 0){
             jobs();
-            addToRecentCmds(tokens);
+            addToRecentCmds(input);
         }
         else if(strcmp(tokens->items[0], "exit") == 0)
             exitShell();
@@ -86,7 +83,7 @@ int main()
         else
         {
             if(searchPath(tokens, runInBackground))
-                addToRecentCmds(tokens);
+                addToRecentCmds(input);
         }
         
         checkBgStatus();
@@ -477,14 +474,14 @@ void exitShell()
     exit(0);
 }
 
-void addToRecentCmds(tokenlist * tokens){
+void addToRecentCmds(char *command){
     if(numCommands <= 2){
-        snprintf(rCommands2[numCommands], MAX_COMMAND_LENGTH, tokens->items[0]);
+        snprintf(rCommands2[numCommands], MAX_COMMAND_LENGTH, command);
     }
     else{
         snprintf(rCommands2[0], MAX_COMMAND_LENGTH, rCommands2[1]);
         snprintf(rCommands2[1], MAX_COMMAND_LENGTH, rCommands2[2]);
-        snprintf(rCommands2[2], MAX_COMMAND_LENGTH, tokens->items[0]);
+        snprintf(rCommands2[2], MAX_COMMAND_LENGTH, command);
     }
 
     numCommands++;
