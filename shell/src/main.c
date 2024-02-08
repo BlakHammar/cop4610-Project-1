@@ -478,7 +478,7 @@ void exitShell()
     }
 
     if(numCommands == 0){
-         printf("No recent commands");
+         printf("No recent commands\n");
     }
     else if(numCommands>=3){
         printf("Last 3 valid commands:\n");
