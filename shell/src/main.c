@@ -8,6 +8,10 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 
+#define MAX_BACKGROUND_JOBS 10
+#define MAX_RECENT_COMMANDS 3
+#define MAX_COMMAND_LENGTH 200
+
 void display_prompt();
 void expand_environment_variables(char *input);
 bool searchPath(const tokenlist *tokens, int runInBackground);
@@ -20,10 +24,9 @@ void cd(tokenlist * tokens);
 void exitShell();
 void jobs();
 void addToRecentCmds(char *command);
+tokenlist *checkForPipes(char *input);
+void setupPipe(const tokenlist *cmds);
 
-#define MAX_BACKGROUND_JOBS 10
-#define MAX_RECENT_COMMANDS 3
-#define MAX_COMMAND_LENGTH 200
 
 typedef struct
 {
@@ -33,18 +36,12 @@ typedef struct
     int active;
 } backgroundJob;
 
-typedef struct
-{
-    char command[MAX_COMMAND_LENGTH];
-
-} recentCommand;
 
 backgroundJob bgProcess[MAX_BACKGROUND_JOBS];
 int nextJob = 1;
 
 int numCommands = 0;
-recentCommand rCommands[MAX_RECENT_COMMANDS];
-char rCommands2[MAX_RECENT_COMMANDS][MAX_COMMAND_LENGTH];
+char rCommands[MAX_RECENT_COMMANDS][MAX_COMMAND_LENGTH];
 
 int main()
 {
@@ -55,41 +52,59 @@ int main()
          * tokens contains substrings from input split by spaces
          */
         char *input = get_input();
-        printf("whole input: %s\n", input);
 
         expand_environment_variables(input);
 
-        tokenlist *tokens = get_tokens(input);
+        tokenlist *cmds = checkForPipes(input);
+
+        size_t numCmds = 0;
+        // Iterate until a NULL pointer is encountered
+        while (cmds->items[numCmds] != NULL) {
+            printf("Command %zu: %s\n", numCmds + 1, cmds->items[numCmds]);
+            numCmds++;
+        }
         
-        int runInBackground = 0;
-        if(strcmp(tokens->items[tokens->size - 1], "&") == 0 )
-        {
-            runInBackground = 1;
-            free(tokens->items[tokens->size - 1]);
-            tokens->size--;
-        }
-        //Check for commands
-        if(strcmp(tokens->items[0], "cd") == 0){
-            cd(tokens);
-            addToRecentCmds(input);
-        }
-        else if(strcmp(tokens->items[0], "jobs") == 0){
-            jobs();
-            addToRecentCmds(input);
-        }
-        else if(strcmp(tokens->items[0], "exit") == 0)
-            exitShell();
-        //Other external command    
-        else
-        {
-            if(searchPath(tokens, runInBackground))
+
+        if(numCmds == 1){
+            tokenlist *tokens = get_tokens(input, " ");
+        
+            int runInBackground = 0;
+
+            if(strcmp(tokens->items[tokens->size - 1], "&") == 0 )
+            {
+                runInBackground = 1;
+                free(tokens->items[tokens->size - 1]);
+                tokens->size--;
+            }
+
+            //Check for commands
+            if(strcmp(tokens->items[0], "cd") == 0){
+                cd(tokens);
                 addToRecentCmds(input);
+            }
+            else if(strcmp(tokens->items[0], "jobs") == 0){
+                jobs();
+                addToRecentCmds(input);
+            }
+            else if(strcmp(tokens->items[0], "exit") == 0)
+                exitShell();
+            //Other external command   
+            else{
+                if(searchPath(tokens, runInBackground))
+                    addToRecentCmds(input);
+            } 
+
+            free_tokens(tokens);
+        } 
+        else if(numCmds == 2){
+            setupPipe(cmds);
+            addToRecentCmds(input);
         }
         
         checkBgStatus();
         
+        free_tokens(cmds);
         free(input);
-        free_tokens(tokens);
     }
 
     return 0;
@@ -127,15 +142,18 @@ void expand_environment_variables(char *input)
     {
         if (token[0] == '$')
         {
+            printf("Found $");
             // Expand environment variable
             char *env_variable = getenv(token + 1);
             if(env_variable != NULL)
             {
+                printf("Env exists");
                 // Concatenate the environment variable value to the modified string
                 strcat(modified_input, env_variable);
                 strcat(modified_input, " ");
             } else
             {
+                printf("Env doesnt exist");
                 // If the environment variable doesn't exist, keep the original token
                 strcat(modified_input, token);
                 strcat(modified_input, " ");
@@ -464,25 +482,88 @@ void exitShell()
     }
     else if(numCommands>=3){
         printf("Last 3 valid commands:\n");
-        printf("[1]: %s\n",rCommands2[2]);
-        printf("[2]: %s\n",rCommands2[1]);
-        printf("[3]: %s\n",rCommands2[0]);
+        printf("[1]: %s\n",rCommands[2]);
+        printf("[2]: %s\n",rCommands[1]);
+        printf("[3]: %s\n",rCommands[0]);
     }
     else{
-        printf("Last valid command: %s",rCommands2[numCommands-1]);
+        printf("Last valid command: %s",rCommands[numCommands-1]);
     }
     exit(0);
 }
 
 void addToRecentCmds(char *command){
     if(numCommands <= 2){
-        snprintf(rCommands2[numCommands], MAX_COMMAND_LENGTH, command);
+        snprintf(rCommands[numCommands], MAX_COMMAND_LENGTH, command);
     }
     else{
-        snprintf(rCommands2[0], MAX_COMMAND_LENGTH, rCommands2[1]);
-        snprintf(rCommands2[1], MAX_COMMAND_LENGTH, rCommands2[2]);
-        snprintf(rCommands2[2], MAX_COMMAND_LENGTH, command);
+        snprintf(rCommands[0], MAX_COMMAND_LENGTH, rCommands[1]);
+        snprintf(rCommands[1], MAX_COMMAND_LENGTH, rCommands[2]);
+        snprintf(rCommands[2], MAX_COMMAND_LENGTH, command);
     }
 
     numCommands++;
+}
+
+tokenlist *checkForPipes(char *input){
+    char *inputCopy = strdup(input);
+    tokenlist *cmds = get_tokens(input, "|");
+
+    free(inputCopy);
+    return cmds;
+}
+
+void setupPipe(const tokenlist *cmds){
+    int pipefd[2];
+    if (pipe(pipefd) == -1) {
+        perror("pipe");
+        exit(EXIT_FAILURE);
+    }
+
+    pid_t pid1 = fork();
+    if (pid1 == -1) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    }
+    
+    if (pid1 == 0) {
+        // Child process 1
+        close(pipefd[0]);  // Close unused read end
+        dup2(pipefd[1], STDOUT_FILENO);  // Redirect stdout to the write end of the pipe
+        close(pipefd[1]);  // Close the write end
+
+        tokenlist *tokens = get_tokens(cmds->items[0], " ");
+        searchPath(tokens, 0);
+
+        free_tokens(tokens);
+        exit(EXIT_SUCCESS);
+    }
+
+    pid_t pid2 = fork();
+
+    if (pid2 == -1) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pid2 == 0) {
+        // Child process 2
+        close(pipefd[1]);  // Close unused write end
+        dup2(pipefd[0], STDIN_FILENO);  // Redirect stdin to the read end of the pipe
+        close(pipefd[0]);  // Close the read end
+
+        tokenlist *tokens = get_tokens(cmds->items[1], " ");
+        searchPath(tokens, 0);
+
+        free_tokens(tokens);
+        exit(EXIT_SUCCESS);
+    }
+
+    // Parent process
+    close(pipefd[0]);  // Close both ends in the parent
+    close(pipefd[1]);
+
+    // Wait for both child processes to finish
+    waitpid(pid1, NULL, 0);
+    waitpid(pid2, NULL, 0);
 }

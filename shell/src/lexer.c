@@ -46,11 +46,11 @@ void add_token(tokenlist *tokens, char *item) {
 	tokens->size += 1;
 }
 
-tokenlist *get_tokens(char *input) {
+tokenlist *get_tokens(char *input, char delim[1]) {
 	char *buf = (char *)malloc(strlen(input) + 1);
 	strcpy(buf, input);
 	tokenlist *tokens = new_tokenlist();
-	char *tok = strtok(buf, " ");
+	char *tok = strtok(buf, delim);
 	while (tok != NULL)
 	{
 		add_token(tokens, tok);
