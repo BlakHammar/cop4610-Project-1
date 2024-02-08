@@ -460,7 +460,7 @@ void exitShell()
     }
 
     if(numCommands == 0){
-         printf("No recent commands");
+         printf("No recent commands\n");
     }
     else if(numCommands>=3){
         printf("Last 3 valid commands:\n");
@@ -469,7 +469,7 @@ void exitShell()
         printf("[3]: %s\n",rCommands2[0]);
     }
     else{
-        printf("Last valid command: %s",rCommands2[numCommands-1]);
+        printf("Last valid command: %s\n",rCommands2[numCommands-1]);
     }
     exit(0);
 }
