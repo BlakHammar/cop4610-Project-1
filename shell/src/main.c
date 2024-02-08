@@ -17,6 +17,8 @@ void redirection(char *fileIn, char *fileOut);
 void executeCommandModified(const char *fullPath, const tokenlist *tokens, int runInBackground);
 void checkBgStatus();
 void cd(tokenlist * tokens);
+void exitShell();
+void jobs();
 
 #define MAX_BACKGROUND_JOBS 10
 #define MAX_RECENT_COMMANDS 3
@@ -29,8 +31,16 @@ typedef struct
     int active;
 } backgroundJob;
 
+typedef struct
+{
+    char command[200];
+
+} recentCommand;
+
 backgroundJob bgProcess[MAX_BACKGROUND_JOBS];
 int nextJob = 1;
+
+recentCommand rCommands[MAX_RECENT_COMMANDS];
 
 int main()
 {
@@ -60,6 +70,10 @@ int main()
         //Check for commands
         if(strcmp(tokens->items[0], "cd") == 0)
             cd(tokens);
+        else if(strcmp(tokens->items[0], "exit") == 0)
+            exitShell();
+        else if(strcmp(tokens->items[0], "jobs") == 0)
+            jobs();
         //Other external command    
         else
         {
@@ -384,6 +398,24 @@ void checkBgStatus()
     }
 }
 
+// List background jobs
+void jobs()
+{
+    // Bool for checking active jobs
+    bool status = false;
+    for(int i = 0; i <MAX_BACKGROUND_JOBS; i++)
+    {
+        if(bgProcess[i].active)
+        {
+            status = true;
+            printf("[%d]+[%d] [%s]\n", bgProcess[i].jobNum, bgProcess[i].pid, bgProcess[i].command);
+        }
+    }
+    // No background jobs in array
+    if(!status)
+        printf("No active background processes\n");
+
+}
 // Change directory
 void cd(tokenlist * tokens)
 {
@@ -408,3 +440,7 @@ void cd(tokenlist * tokens)
         perror("cd");
 }
 
+void exitShell()
+{
+    exit(0);
+}
