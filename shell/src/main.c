@@ -14,11 +14,11 @@
 
 void display_prompt();
 void expand_environment_variables(char *input);
-bool searchPath(const tokenlist *tokens, int runInBackground);
+bool searchPath(const tokenlist *tokens, int runInBackground, char*input);
 void executeCommand(const char *fullPath, const tokenlist *tokens);
 char **tokenlist_to_argv(const tokenlist *tokens);
 void redirection(char *fileIn, char *fileOut);
-void executeCommandModified(const char *fullPath, const tokenlist *tokens, int runInBackground);
+void executeCommandModified(const char *fullPath, const tokenlist *tokens, int runInBackground, char*input);
 bool checkBgStatus();
 void cd(tokenlist * tokens);
 void exitShell();
@@ -90,7 +90,7 @@ int main()
             //Other external command   
             else{
                 //Add command to recent cmds if successful
-                if(searchPath(tokens, runInBackground))
+                if(searchPath(tokens, runInBackground, input))
                     addToRecentCmds(input);
             } 
 
@@ -193,7 +193,7 @@ void expand_environment_variables(char *input)
     strcpy(input, modified_input);
 }
 
-bool searchPath(const tokenlist *tokens, int runInBackground) {
+bool searchPath(const tokenlist *tokens, int runInBackground, char *input) {
     // Check if tokens is empty
     if (tokens == NULL || tokens->size == 0) {
         fprintf(stderr, "No command provided\n");
@@ -228,7 +228,7 @@ bool searchPath(const tokenlist *tokens, int runInBackground) {
         // Check if the file exists
         if (access(fullPath, X_OK) == 0) {
             // The file exists and is executable, execute it
-            executeCommandModified(fullPath,tokens, runInBackground);
+            executeCommandModified(fullPath,tokens, runInBackground, input);
             foundPath = true;
             break;  // Stop searching after the first match
         }
@@ -322,7 +322,7 @@ void redirection(char *fileIn, char *fileOut) {
 }
 
 //Modified execute to work with IO redirection
-void executeCommandModified(const char *fullPath, const tokenlist *tokens, int runInBackground) {
+void executeCommandModified(const char *fullPath, const tokenlist *tokens, int runInBackground, char *input) {
     pid_t pid = fork(); // Create a child process
 
     if (pid < 0) {
@@ -381,7 +381,7 @@ void executeCommandModified(const char *fullPath, const tokenlist *tokens, int r
                     // Found
                     bgProcess[i].pid = pid;
                     bgProcess[i].jobNum = nextJob++;
-                    strncpy(bgProcess[i].command, fullPath, sizeof(bgProcess[i].command));
+                    strncpy(bgProcess[i].command, input, sizeof(bgProcess[i].command));
                     bgProcess[i].active = 1;
                     printf("[%d] %d\n", bgProcess[i].jobNum, pid);
                     break;
@@ -438,7 +438,7 @@ void jobs()
         if(bgProcess[i].active)
         {
             status = true;
-            printf("[%d]+[%d] [%s]\n", bgProcess[i].jobNum, bgProcess[i].pid, bgProcess[i].command);
+            printf("[%d] +%d %s\n", bgProcess[i].jobNum, bgProcess[i].pid, bgProcess[i].command);
         }
     }
     // No background jobs in array
@@ -550,7 +550,7 @@ bool setupPipes(const tokenlist *cmds, int numCmds) {
 
             // Tokenization and command execution
             tokenlist *tokens = get_tokens(cmds->items[i], " ");
-            if (!searchPath(tokens, 0))
+            if (!searchPath(tokens, 0, " "))
                 commandStatus = EXIT_FAILURE;
 
             free_tokens(tokens);
@@ -567,7 +567,12 @@ bool setupPipes(const tokenlist *cmds, int numCmds) {
     // Wait for child processes
     for (int i = 0; i < numCmds; i++) {
         int status;
-        waitpid(pids[i], &status, 0);
+        pid_t result = waitpid(pids[i], &status, 0);
+
+        if (result == -1) {
+            perror("waitpid");
+            commandStatus = EXIT_FAILURE;
+        }
         if (WIFEXITED(status) && WEXITSTATUS(status) != EXIT_SUCCESS) {
             commandStatus = EXIT_FAILURE;
         }
