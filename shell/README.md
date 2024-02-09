@@ -86,3 +86,4 @@ This will run the program ...
 
 ## Bugs
 
+- The function setUpPipes can take in any number of commands and runs a loop to create the child processes but the piping does not seem to work for more than 2 commands
